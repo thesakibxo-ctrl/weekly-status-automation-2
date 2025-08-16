@@ -20,7 +20,7 @@ if uploaded_csv:
     df.columns = df.columns.str.strip().str.lower()
 
     # Check required columns
-    required_cols = ["description", "activity"]
+    required_cols = ["description", "activity", "date"]
     missing_cols = [col for col in required_cols if col not in df.columns]
     if missing_cols:
         st.error(f"CSV is missing required columns: {missing_cols}")
@@ -28,9 +28,21 @@ if uploaded_csv:
 
     # Remove irrelevant rows
     df = df[~df["description"].isin(["", "Total", "Weekly Total"])]
-    df = df.dropna(subset=["description", "activity"])
+    df = df.dropna(subset=["description", "activity", "date"])
 
-    # Convert hours+minutes to decimal
+    # -------------------------------
+    # Step 1b: Period Covered
+    # -------------------------------
+    df['date'] = pd.to_datetime(df['date'], errors='coerce')
+    df = df.dropna(subset=['date'])
+    start_date = df.iloc[0]['date']
+    end_date = df.iloc[-1]['date']
+    period_covered = f"{start_date.strftime('%B %d')} - {end_date.strftime('%B %d, %Y')}"
+    st.markdown(f"<h3 style='color:black; font-size:20px; text-align:left;'>Period Covered: {period_covered}</h3>", unsafe_allow_html=True)
+
+    # -------------------------------
+    # Step 2: Convert hours+minutes to decimal
+    # -------------------------------
     if "hours" in df.columns and "minutes" in df.columns:
         df["spent_hours"] = df["hours"].astype(float) + df["minutes"].astype(float)/60
     elif "spent hours" in df.columns:
@@ -40,7 +52,7 @@ if uploaded_csv:
         st.stop()
 
     # -------------------------------
-    # Step 2: Merge tasks
+    # Step 3: Merge tasks
     # -------------------------------
     communication_tasks = df[df["activity"].str.lower() == "communication"]
     other_tasks = df[df["activity"].str.lower() != "communication"]
@@ -67,7 +79,7 @@ if uploaded_csv:
     processed_tasks = pd.DataFrame(rows)
 
     # -------------------------------
-    # Step 3: Format Spent Hours as "0h 0m"
+    # Step 4: Format Spent Hours as "0h 0m"
     # -------------------------------
     def format_hours(decimal_hours):
         total_minutes = round(decimal_hours * 60)
@@ -78,7 +90,7 @@ if uploaded_csv:
     processed_tasks["Spent Hours"] = processed_tasks["Spent Hours"].apply(format_hours)
 
     # -------------------------------
-    # Step 4: Add Weekly Total Row
+    # Step 5: Add Weekly Total Row
     # -------------------------------
     total_minutes = processed_tasks["Spent Hours"].apply(
         lambda x: int(x.split("h")[0])*60 + int(x.split(" ")[1].replace("m",""))
@@ -93,7 +105,7 @@ if uploaded_csv:
     final_table = pd.concat([processed_tasks, weekly_total], ignore_index=True)
 
     # -------------------------------
-    # Step 5: Display Table
+    # Step 6: Display Table
     # -------------------------------
     st.subheader("Weekly Status Preview")
     st.dataframe(final_table[["Task Title", "Spent Hours"]], use_container_width=True)
