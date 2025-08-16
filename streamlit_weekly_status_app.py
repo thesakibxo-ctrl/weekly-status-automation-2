@@ -4,7 +4,7 @@ import requests
 import os
 import time
 
-st.title("Weekly Status Preview with Reliable AI Summaries")
+st.title("Weekly Status Preview with AI Remarks")
 
 # -------------------------------
 # Step 0: Load OpenRouter API Key safely
@@ -22,6 +22,9 @@ if not api_key:
 # -------------------------------
 def summarize_task(text, retries=3, delay=2):
     """Use OpenRouter GPT-4o-mini to summarize task description with retries."""
+    if not text.strip():
+        return "No description provided."
+    
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}"}
     payload = {
@@ -92,9 +95,9 @@ if uploaded_csv:
     # Communication merged
     if not communication_tasks.empty:
         comm_hours = communication_tasks["spent_hours"].sum()
-        comm_remarks_text = " | ".join(communication_tasks["description"].tolist())
+        comm_text = " | ".join(communication_tasks["description"].tolist())
         with st.spinner("Generating AI remark for Communication..."):
-            ai_summary = summarize_task(comm_remarks_text)
+            ai_summary = summarize_task(comm_text)
         rows.append({
             "Task Title": "Communication",
             "Spent Hours": comm_hours,
@@ -105,12 +108,14 @@ if uploaded_csv:
     if not other_tasks.empty:
         grouped = other_tasks.groupby("description", as_index=False).agg({"spent_hours": "sum"})
         for _, row in grouped.iterrows():
-            task_title = row["description"]
+            task_desc = row["description"]
             spent_hours = row["spent_hours"]
-            with st.spinner(f"Generating AI remark for task: {task_title}"):
-                ai_summary = summarize_task(task_title)
+            # Take all matching descriptions from CSV for better context
+            task_text = " | ".join(other_tasks[other_tasks["description"] == task_desc]["description"].tolist())
+            with st.spinner(f"Generating AI remark for task: {task_desc}"):
+                ai_summary = summarize_task(task_text)
             rows.append({
-                "Task Title": task_title,
+                "Task Title": task_desc,
                 "Spent Hours": spent_hours,
                 "Remarks": ai_summary
             })
