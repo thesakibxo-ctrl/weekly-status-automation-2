@@ -107,7 +107,16 @@ if uploaded_csv:
     # -------------------------------
     # Step 6: Display Table
     # -------------------------------
+    # Step 6: Display Table heading
     st.subheader("Weekly Status Preview")
+
+    # Period Covered below the heading, 16px and bold, white text
+    st.markdown(
+    f"<p style='color:white; font-size:16px; font-weight:bold;'>Period Covered: {period_covered}</p>",
+    unsafe_allow_html=True
+    )
+
+
     st.dataframe(final_table[["Task Title", "Spent Hours"]], use_container_width=True)
 
     # Download CSV
