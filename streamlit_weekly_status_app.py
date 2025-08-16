@@ -22,14 +22,15 @@ if uploaded_csv:
     # -------------------------------
     # Step 2: Check required columns
     # -------------------------------
-    required_cols = ["description", "category"]
-    if not any(col in df.columns for col in required_cols):
-        st.error(f"CSV must have columns like {required_cols}. Detected: {df.columns.tolist()}")
+    required_cols = ["description", "activity"]
+    missing_cols = [col for col in required_cols if col not in df.columns]
+    if missing_cols:
+        st.error(f"CSV is missing required columns: {missing_cols}")
         st.stop()
 
     # Remove irrelevant rows
     df = df[~df["description"].isin(["", "Total", "Weekly Total"])]
-    df = df.dropna(subset=["description", "category"])
+    df = df.dropna(subset=["description", "activity"])
 
     # -------------------------------
     # Step 3: Convert Hours + Minutes to decimal
@@ -45,8 +46,8 @@ if uploaded_csv:
     # -------------------------------
     # Step 4: Separate Communication & Other Tasks
     # -------------------------------
-    communication_tasks = df[df["category"].str.lower() == "communication"]
-    other_tasks = df[df["category"].str.lower() != "communication"]
+    communication_tasks = df[df["activity"].str.lower() == "communication"]
+    other_tasks = df[df["activity"].str.lower() != "communication"]
 
     rows = []
 
