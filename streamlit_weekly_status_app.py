@@ -1,68 +1,79 @@
 import streamlit as st
 import pandas as pd
-import requests
 
-st.set_page_config(page_title="Weekly Status", page_icon="📊", layout="centered")
+# ------------------ SETTINGS ------------------
+st.set_page_config(page_title="Weekly Status", layout="centered")
+st.title("📊 Weekly Status Report")
 
-st.title("📊 Weekly Status App")
+# ------------------ INPUTS ------------------
+col1, col2 = st.columns(2)
+with col1:
+    start_date = st.date_input("Start Date")
+with col2:
+    end_date = st.date_input("End Date")
 
-# Sidebar for API key
-api_key = st.sidebar.text_input("🔑 Enter your OpenRouter API Key (optional)", type="password")
-
-# Upload CSV
 uploaded_file = st.file_uploader("Upload your weekly status CSV", type=["csv"])
 
-# Function to get AI remark
-def get_ai_remark(task, api_key):
-    if not api_key:
-        return ""  # If no key, return empty remark
-    
-    try:
-        response = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "HTTP-Referer": "http://localhost:8501/",
-                "X-Title": "Weekly Status App"
-            },
-            json={
-                "model": "gpt-4o-mini",
-                "messages": [
-                    {"role": "user", "content": f"Write a short remark for this task: {task}"}
-                ],
-                "max_tokens": 40
-            }
-        )
-        result = response.json()
-        return result["choices"][0]["message"]["content"]
-    except Exception as e:
-        return f"(Error: {str(e)})"
+# ------------------ HELPER: COPY TABLE ------------------
+def make_table_with_copy(df):
+    table_html = "<table style='border-collapse: collapse; margin: auto;'>"
+    # headers
+    table_html += "<tr>" + "".join(
+        [f"<th style='padding:8px;border:1px solid #ccc;'>{col}</th>" for col in df.columns]
+    ) + "</tr>"
+    # rows
+    for _, row in df.iterrows():
+        table_html += "<tr>"
+        for val in row:
+            table_html += f"""
+            <td style='padding:8px; border:1px solid #ccc; position:relative;'>
+                {val}
+                <span class="copy-icon" style="
+                    visibility:hidden;
+                    cursor:pointer;
+                    position:absolute;
+                    right:4px;
+                    top:4px;
+                    font-size:12px;
+                    color:#888;">📋</span>
+            </td>
+            """
+        table_html += "</tr>"
+    table_html += "</table>"
 
+    # CSS + JS for copy-on-hover
+    custom_script = """
+    <style>
+        td:hover .copy-icon { visibility: visible; }
+    </style>
+    <script>
+        const icons = window.parent.document.querySelectorAll('.copy-icon');
+        icons.forEach(icon => {
+            icon.onclick = function(e) {
+                const text = icon.parentElement.innerText.replace('📋','').trim();
+                navigator.clipboard.writeText(text);
+                icon.innerText = "✅";
+                setTimeout(()=>{ icon.innerText = "📋"; }, 1000);
+            }
+        });
+    </script>
+    """
+    return table_html + custom_script
+
+# ------------------ SHOW TABLE ------------------
 if uploaded_file is not None:
     df = pd.read_csv(uploaded_file)
-
-    # Add remarks column if not present
-    if "Remarks" not in df.columns:
-        df["Remarks"] = ""
-
-    # Generate AI remarks if key is provided
-    if api_key:
-        with st.spinner("✨ Generating AI remarks..."):
-            df["Remarks"] = df["Task"].apply(lambda x: get_ai_remark(x, api_key))
-
-    # Show Start & End Date (separated from table)
-    if "Start Date" in df.columns and "End Date" in df.columns:
-        st.markdown(
-            f"**📅 Reporting Period:** {df['Start Date'].iloc[0]} → {df['End Date'].iloc[0]}"
-        )
-
-    # Show final table
-    st.dataframe(df, use_container_width=True)
-
-    # Option to download updated CSV
+    
+    # Show reporting period
+    st.subheader(f"📅 Reporting Period: {start_date} → {end_date}")
+    
+    # Show table with copy-on-hover
+    st.markdown(make_table_with_copy(df), unsafe_allow_html=True)
+    
+    # Optional: download button
     st.download_button(
-        "📥 Download Updated CSV",
+        "📥 Download CSV",
         df.to_csv(index=False).encode("utf-8"),
-        "weekly_status_with_remarks.csv",
+        "weekly_status.csv",
         "text/csv"
     )
