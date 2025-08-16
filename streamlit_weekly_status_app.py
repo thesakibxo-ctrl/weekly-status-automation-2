@@ -1,8 +1,9 @@
 import streamlit as st
 import pandas as pd
+from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
 st.set_page_config(layout="wide")
-st.title("Weekly Status Preview (No AI)")
+st.title("Weekly Status Preview (Interactive Table)")
 
 # -------------------------------
 # Step 1: Upload CSV
@@ -97,7 +98,31 @@ if uploaded_csv:
     final_table = pd.concat([processed_tasks, weekly_total], ignore_index=True)
 
     # -------------------------------
-    # Step 5: Display Full-width Table
+    # Step 5: Configure AG Grid
     # -------------------------------
+    gb = GridOptionsBuilder.from_dataframe(final_table)
+    gb.configure_default_column(resizable=True, editable=False, cellStyle={'white-space': 'normal'})
+    gb.configure_selection(selection_mode="single", use_checkbox=False)
+    gb.configure_grid_options(domLayout='autoHeight')  # full width
+    # Enable copy icon on hover
+    gb.configure_columns(["Task Title", "Spent Hours"], 
+                         cellRenderer=JsCode("""
+                         class BtnCellRenderer {
+                             init(params) {
+                                 this.eGui = document.createElement('div');
+                                 this.eGui.style.display = 'flex';
+                                 this.eGui.style.justifyContent = 'space-between';
+                                 this.eGui.innerHTML = `<span>${params.value}</span>
+                                                        <button class="copy-btn" title="Copy">📋</button>`;
+                                 const btn = this.eGui.querySelector('.copy-btn');
+                                 btn.addEventListener('click', () => navigator.clipboard.writeText(params.value));
+                             }
+                             getGui() {
+                                 return this.eGui;
+                             }
+                         }
+                         """))
+    gridOptions = gb.build()
+
     st.subheader("Weekly Status Preview")
-    st.dataframe(final_table[["Task Title", "Spent Hours"]], use_container_width=True)
+    AgGrid(final_table, gridOptions=gridOptions, enable_enterprise_modules=False, fit_columns_on_grid_load=True)
