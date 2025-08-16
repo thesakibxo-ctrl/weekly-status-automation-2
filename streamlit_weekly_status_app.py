@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 
-st.title("Weekly Status Preview with Weekly Total")
+st.title("Weekly Status Preview (Robust Version)")
 
 # -------------------------------
 # Step 1: Upload CSV
@@ -9,50 +9,70 @@ st.title("Weekly Status Preview with Weekly Total")
 uploaded_csv = st.file_uploader("Upload your timesheet CSV", type=["csv"])
 
 if uploaded_csv:
-    df = pd.read_csv(uploaded_csv, encoding="utf-8-sig", keep_default_na=False)
-    st.write(f"Loaded rows: {len(df)}")
+    try:
+        df = pd.read_csv(uploaded_csv, encoding="utf-8-sig", keep_default_na=False)
+    except Exception as e:
+        st.error(f"Error reading CSV: {e}")
+        st.stop()
+
+    # Normalize column names: strip spaces and lowercase
+    df.columns = df.columns.str.strip().str.lower()
+    st.write("CSV Columns Detected:", df.columns.tolist())
 
     # -------------------------------
-    # Step 2: Clean CSV
+    # Step 2: Check required columns
     # -------------------------------
-    df = df[~df["Description"].isin(["", "Total", "Weekly Total"])]
-    df = df.dropna(subset=["Description", "Category"])  # optional
+    required_cols = ["description", "category"]
+    if not any(col in df.columns for col in required_cols):
+        st.error(f"CSV must have columns like {required_cols}. Detected: {df.columns.tolist()}")
+        st.stop()
 
-    # Convert Hours + Minutes to decimal if they exist
-    if "Hours" in df.columns and "Minutes" in df.columns:
-        df["Spent Hours"] = df["Hours"].astype(float) + df["Minutes"].astype(float)/60
-    elif "Spent Hours" in df.columns:
-        df["Spent Hours"] = df["Spent Hours"].astype(float)
+    # Remove irrelevant rows
+    df = df[~df["description"].isin(["", "Total", "Weekly Total"])]
+    df = df.dropna(subset=["description", "category"])
+
+    # -------------------------------
+    # Step 3: Convert Hours + Minutes to decimal
+    # -------------------------------
+    if "hours" in df.columns and "minutes" in df.columns:
+        df["spent_hours"] = df["hours"].astype(float) + df["minutes"].astype(float)/60
+    elif "spent hours" in df.columns:
+        df["spent_hours"] = df["spent hours"].astype(float)
     else:
-        st.error("CSV must have either 'Spent Hours' or both 'Hours' and 'Minutes' columns.")
+        st.error("CSV must have either 'Hours' and 'Minutes' or 'Spent Hours' column.")
         st.stop()
 
     # -------------------------------
-    # Step 3: Separate Communication and Other Tasks
+    # Step 4: Separate Communication & Other Tasks
     # -------------------------------
-    communication_tasks = df[df["Category"].str.lower() == "communication"]
-    other_tasks = df[df["Category"].str.lower() != "communication"]
+    communication_tasks = df[df["category"].str.lower() == "communication"]
+    other_tasks = df[df["category"].str.lower() != "communication"]
 
-    # Merge Communication tasks
     rows = []
+
+    # Communication merged
     if not communication_tasks.empty:
-        comm_hours = communication_tasks["Spent Hours"].sum()
-        comm_remarks = " | ".join(communication_tasks["Description"].tolist())
+        comm_hours = communication_tasks["spent_hours"].sum()
+        comm_remarks = " | ".join(communication_tasks["description"].tolist())
         rows.append({"Task Title": "Communication", "Spent Hours": comm_hours, "Remarks": comm_remarks})
 
     # Merge duplicate descriptions for other tasks
     if not other_tasks.empty:
-        grouped = other_tasks.groupby("Description", as_index=False).agg({"Spent Hours": "sum"})
+        grouped = other_tasks.groupby("description", as_index=False).agg({"spent_hours": "sum"})
         for _, row in grouped.iterrows():
-            task_title = row["Description"]
-            spent_hours = row["Spent Hours"]
-            remarks = row["Description"]  # Remarks same as description
+            task_title = row["description"]
+            spent_hours = row["spent_hours"]
+            remarks = row["description"]
             rows.append({"Task Title": task_title, "Spent Hours": spent_hours, "Remarks": remarks})
+
+    if not rows:
+        st.warning("No valid tasks found in CSV after cleaning.")
+        st.stop()
 
     processed_tasks = pd.DataFrame(rows)
 
     # -------------------------------
-    # Step 4: Format Spent Hours as "0h 0m"
+    # Step 5: Format Spent Hours as "0h 0m"
     # -------------------------------
     def format_hours(decimal_hours):
         total_minutes = int(decimal_hours * 60)
@@ -63,11 +83,13 @@ if uploaded_csv:
     processed_tasks["Spent Hours"] = processed_tasks["Spent Hours"].apply(format_hours)
 
     # -------------------------------
-    # Step 5: Add Weekly Total row
+    # Step 6: Add Weekly Total Row
     # -------------------------------
-    total_hours = processed_tasks["Spent Hours"].apply(lambda x: int(x.split("h")[0])*60 + int(x.split(" ")[1].replace("m",""))).sum()
-    total_h = total_hours // 60
-    total_m = total_hours % 60
+    total_minutes = processed_tasks["Spent Hours"].apply(
+        lambda x: int(x.split("h")[0])*60 + int(x.split(" ")[1].replace("m",""))
+    ).sum()
+    total_h = total_minutes // 60
+    total_m = total_minutes % 60
     weekly_total = pd.DataFrame([{
         "Task Title": "Weekly Total",
         "Spent Hours": f"{total_h}h {total_m}m",
@@ -77,7 +99,7 @@ if uploaded_csv:
     final_table = pd.concat([processed_tasks, weekly_total], ignore_index=True)
 
     # -------------------------------
-    # Step 6: Show Table
+    # Step 7: Show Table
     # -------------------------------
     st.subheader("Weekly Status Preview")
     st.dataframe(final_table[["Task Title", "Spent Hours", "Remarks"]])
