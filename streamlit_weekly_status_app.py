@@ -2,8 +2,9 @@ import streamlit as st
 import pandas as pd
 import requests
 import os
+import time
 
-st.title("Weekly Status Preview with AI Summaries")
+st.title("Weekly Status Preview with Reliable AI Summaries")
 
 # -------------------------------
 # Step 0: Load OpenRouter API Key safely
@@ -16,21 +17,29 @@ if not api_key:
     )
     st.stop()
 
-def summarize_task(text):
-    """Use OpenRouter GPT-4o-mini to summarize task description"""
+# -------------------------------
+# Helper: Summarize Task with retries & fallback
+# -------------------------------
+def summarize_task(text, retries=3, delay=2):
+    """Use OpenRouter GPT-4o-mini to summarize task description with retries."""
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}"}
     payload = {
         "model": "gpt-4o-mini",
         "messages": [{"role": "user", "content": f"Summarize this task in one sentence: {text}"}]
     }
-    try:
-        response = requests.post(url, json=payload, headers=headers, timeout=30)
-        response.raise_for_status()
-        data = response.json()
-        return data["choices"][0]["message"]["content"]
-    except Exception as e:
-        return f"Error summarizing: {e}"
+
+    for attempt in range(retries):
+        try:
+            response = requests.post(url, json=payload, headers=headers, timeout=30)
+            response.raise_for_status()
+            data = response.json()
+            return data["choices"][0]["message"]["content"]
+        except Exception as e:
+            if attempt < retries - 1:
+                time.sleep(delay)
+            else:
+                return "No summary available"
 
 # -------------------------------
 # Step 1: Upload CSV
@@ -83,8 +92,9 @@ if uploaded_csv:
     # Communication merged
     if not communication_tasks.empty:
         comm_hours = communication_tasks["spent_hours"].sum()
-        comm_remarks = " | ".join(communication_tasks["description"].tolist())
-        ai_summary = summarize_task(comm_remarks)
+        comm_remarks_text = " | ".join(communication_tasks["description"].tolist())
+        with st.spinner("Generating AI remark for Communication..."):
+            ai_summary = summarize_task(comm_remarks_text)
         rows.append({
             "Task Title": "Communication",
             "Spent Hours": comm_hours,
@@ -97,7 +107,8 @@ if uploaded_csv:
         for _, row in grouped.iterrows():
             task_title = row["description"]
             spent_hours = row["spent_hours"]
-            ai_summary = summarize_task(task_title)
+            with st.spinner(f"Generating AI remark for task: {task_title}"):
+                ai_summary = summarize_task(task_title)
             rows.append({
                 "Task Title": task_title,
                 "Spent Hours": spent_hours,
