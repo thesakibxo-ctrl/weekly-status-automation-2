@@ -1,52 +1,8 @@
 import streamlit as st
 import pandas as pd
-import requests
-import os
-import time
 
 st.set_page_config(layout="wide")
-st.title("Weekly Status Preview with AI Remarks")
-
-# -------------------------------
-# Step 0: Load OpenRouter API Key
-# -------------------------------
-api_key = st.secrets.get("openrouter", {}).get("api_key") or os.getenv("OPENROUTER_API_KEY")
-if not api_key:
-    st.error(
-        "OpenRouter API key not found! "
-        "Set it in .streamlit/secrets.toml or as environment variable OPENROUTER_API_KEY"
-    )
-    st.stop()
-
-# -------------------------------
-# Helper: Summarize Task using prompt-based completion
-# -------------------------------
-def summarize_task(text, retries=3, delay=2):
-    if not text.strip():
-        return "No description provided."
-    
-    url = "https://openrouter.ai/v1/completions"
-    headers = {"Authorization": f"Bearer {api_key}"}
-    payload = {
-        "model": "gpt-4o-mini",
-        "prompt": f"Summarize this task in one concise sentence: {text}",
-        "max_tokens": 50
-    }
-
-    for attempt in range(retries):
-        try:
-            response = requests.post(url, json=payload, headers=headers, timeout=30)
-            print("API status:", response.status_code)
-            print("API raw response:", response.text)
-            response.raise_for_status()
-            data = response.json()
-            return data.get("choices", [{}])[0].get("text", "No summary available").strip()
-        except Exception as e:
-            print(f"Attempt {attempt+1} failed:", e)
-            if attempt < retries - 1:
-                time.sleep(delay)
-            else:
-                return f"No summary available (error: {e})"
+st.title("Weekly Status Preview (No AI)")
 
 # -------------------------------
 # Step 1: Upload CSV
@@ -94,28 +50,18 @@ if uploaded_csv:
     # Merge Communication
     if not communication_tasks.empty:
         comm_hours = communication_tasks["spent_hours"].sum()
-        comm_text = " | ".join(communication_tasks["description"].tolist())
-        with st.spinner("Generating AI remark for Communication..."):
-            ai_summary = summarize_task(comm_text)
         rows.append({
             "Task Title": "Communication",
-            "Spent Hours": comm_hours,
-            "Remarks": ai_summary
+            "Spent Hours": comm_hours
         })
 
     # Merge duplicate other tasks
     if not other_tasks.empty:
         grouped = other_tasks.groupby("description", as_index=False).agg({"spent_hours": "sum"})
         for _, row in grouped.iterrows():
-            task_desc = row["description"]
-            spent_hours = row["spent_hours"]
-            task_text = " | ".join(other_tasks[other_tasks["description"] == task_desc]["description"].tolist())
-            with st.spinner(f"Generating AI remark for task: {task_desc}"):
-                ai_summary = summarize_task(task_text)
             rows.append({
-                "Task Title": task_desc,
-                "Spent Hours": spent_hours,
-                "Remarks": ai_summary
+                "Task Title": row["description"],
+                "Spent Hours": row["spent_hours"]
             })
 
     if not rows:
@@ -145,8 +91,7 @@ if uploaded_csv:
     total_m = total_minutes % 60
     weekly_total = pd.DataFrame([{
         "Task Title": "Weekly Total",
-        "Spent Hours": f"{total_h}h {total_m}m",
-        "Remarks": ""
+        "Spent Hours": f"{total_h}h {total_m}m"
     }])
 
     final_table = pd.concat([processed_tasks, weekly_total], ignore_index=True)
@@ -155,4 +100,4 @@ if uploaded_csv:
     # Step 5: Display Full-width Table
     # -------------------------------
     st.subheader("Weekly Status Preview")
-    st.dataframe(final_table[["Task Title", "Spent Hours", "Remarks"]], use_container_width=True)
+    st.dataframe(final_table[["Task Title", "Spent Hours"]], use_container_width=True)
