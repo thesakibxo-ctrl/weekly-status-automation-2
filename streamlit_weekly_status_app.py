@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 
-st.title("Weekly Status Preview (No Excel Output)")
+st.title("Weekly Status Preview with Weekly Total")
 
 # -------------------------------
 # Step 1: Upload CSV
@@ -34,34 +34,25 @@ if uploaded_csv:
     other_tasks = df[df["Category"].str.lower() != "communication"]
 
     # Merge Communication tasks
+    rows = []
     if not communication_tasks.empty:
-        comm_row = pd.DataFrame({
-            "Task Title": ["Communication"],
-            "Spent Hours": [communication_tasks["Spent Hours"].sum()],
-            "Remarks": [" | ".join(communication_tasks["Description"].tolist())]
-        })
-    else:
-        comm_row = pd.DataFrame(columns=["Task Title", "Spent Hours", "Remarks"])
+        comm_hours = communication_tasks["Spent Hours"].sum()
+        comm_remarks = " | ".join(communication_tasks["Description"].tolist())
+        rows.append({"Task Title": "Communication", "Spent Hours": comm_hours, "Remarks": comm_remarks})
 
     # Merge duplicate descriptions for other tasks
     if not other_tasks.empty:
-        other_rows = (
-            other_tasks.groupby("Description", as_index=False)
-            .agg({
-                "Spent Hours": "sum",
-                "Description": lambda x: " | ".join(x)
-            })
-            .rename(columns={"Description": "Remarks"})
-        )
-        other_rows["Task Title"] = other_rows["Remarks"]  # Task Title = description
-    else:
-        other_rows = pd.DataFrame(columns=["Task Title", "Spent Hours", "Remarks"])
+        grouped = other_tasks.groupby("Description", as_index=False).agg({"Spent Hours": "sum"})
+        for _, row in grouped.iterrows():
+            task_title = row["Description"]
+            spent_hours = row["Spent Hours"]
+            remarks = row["Description"]  # Remarks same as description
+            rows.append({"Task Title": task_title, "Spent Hours": spent_hours, "Remarks": remarks})
 
-    # Combine all tasks
-    processed_tasks = pd.concat([comm_row, other_rows], ignore_index=True)
+    processed_tasks = pd.DataFrame(rows)
 
     # -------------------------------
-    # Step 4: Format Hours as "0h 0m"
+    # Step 4: Format Spent Hours as "0h 0m"
     # -------------------------------
     def format_hours(decimal_hours):
         total_minutes = int(decimal_hours * 60)
@@ -72,7 +63,21 @@ if uploaded_csv:
     processed_tasks["Spent Hours"] = processed_tasks["Spent Hours"].apply(format_hours)
 
     # -------------------------------
-    # Step 5: Show Table in Streamlit
+    # Step 5: Add Weekly Total row
+    # -------------------------------
+    total_hours = processed_tasks["Spent Hours"].apply(lambda x: int(x.split("h")[0])*60 + int(x.split(" ")[1].replace("m",""))).sum()
+    total_h = total_hours // 60
+    total_m = total_hours % 60
+    weekly_total = pd.DataFrame([{
+        "Task Title": "Weekly Total",
+        "Spent Hours": f"{total_h}h {total_m}m",
+        "Remarks": ""
+    }])
+
+    final_table = pd.concat([processed_tasks, weekly_total], ignore_index=True)
+
+    # -------------------------------
+    # Step 6: Show Table
     # -------------------------------
     st.subheader("Weekly Status Preview")
-    st.dataframe(processed_tasks[["Task Title", "Spent Hours", "Remarks"]])
+    st.dataframe(final_table[["Task Title", "Spent Hours", "Remarks"]])
