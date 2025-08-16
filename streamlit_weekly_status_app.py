@@ -1,72 +1,66 @@
 import streamlit as st
 import pandas as pd
-from st_aggrid import AgGrid, GridOptionsBuilder
 
 st.set_page_config(layout="wide")
-st.title("Weekly Status Preview with AG Grid (Safe Copy)")
+st.title("Weekly Status Preview (Hover Copy Enabled)")
 
+# -------------------------------
+# Step 1: Upload CSV
+# -------------------------------
 uploaded_csv = st.file_uploader("Upload your timesheet CSV", type=["csv"])
 
 if uploaded_csv:
-    df = pd.read_csv(uploaded_csv, encoding="utf-8-sig", keep_default_na=False)
-    df.columns = df.columns.str.strip().str.lower()
-
-    # Validate columns
-    if not all(col in df.columns for col in ["description", "activity"]):
-        st.error("CSV missing required columns: description, activity")
+    try:
+        df = pd.read_csv(uploaded_csv, encoding="utf-8-sig", keep_default_na=False)
+    except Exception as e:
+        st.error(f"Error reading CSV: {e}")
         st.stop()
 
-    # Clean CSV
-    df = df[~df["description"].isin(["", "Total", "Weekly Total"])]
-    df = df.dropna(subset=["description", "activity"])
-
-    # Convert hours to decimal
-    if "hours" in df.columns and "minutes" in df.columns:
-        df["spent_hours"] = df["hours"].astype(float) + df["minutes"].astype(float)/60
-    elif "spent hours" in df.columns:
-        df["spent_hours"] = df["spent hours"].astype(float)
-    else:
-        st.error("CSV must have 'Hours & Minutes' or 'Spent Hours'")
-        st.stop()
-
-    # Merge tasks
-    rows = []
-
-    comm = df[df["activity"].str.lower() == "communication"]
-    if not comm.empty:
-        rows.append({"Task Title": "Communication", "Spent Hours": comm["spent_hours"].sum()})
-
-    others = df[df["activity"].str.lower() != "communication"]
-    grouped = others.groupby("description", as_index=False).agg({"spent_hours": "sum"})
-    for _, row in grouped.iterrows():
-        rows.append({"Task Title": row["description"], "Spent Hours": row["spent_hours"]})
-
-    processed_tasks = pd.DataFrame(rows)
-
-    # Format hours
-    def format_hours(x):
-        total_min = round(x * 60)
-        return f"{total_min // 60}h {total_min % 60}m"
-
-    processed_tasks["Spent Hours"] = processed_tasks["Spent Hours"].apply(format_hours)
-
-    # Weekly total
-    total_min = processed_tasks["Spent Hours"].apply(lambda x: int(x.split("h")[0])*60 + int(x.split(" ")[1].replace("m",""))).sum()
-    processed_tasks = pd.concat([processed_tasks, pd.DataFrame([{"Task Title":"Weekly Total", "Spent Hours": f"{total_min//60}h {total_min%60}m"}])], ignore_index=True)
+    df.columns = df.columns.str.strip()
 
     # -------------------------------
-    # AG Grid (Safe)
+    # Step 2: Display Table with Hover Copy
     # -------------------------------
-    gb = GridOptionsBuilder.from_dataframe(processed_tasks)
-    gb.configure_default_column(resizable=True, editable=False, filterable=True)
-    gb.configure_selection(selection_mode="single", use_checkbox=False)
-    gb.configure_grid_options(domLayout='autoHeight', enableRangeSelection=True)
-    gridOptions = gb.build()
+    table_html = df.to_html(index=False, escape=False, classes="hover-copy-table")
 
-    st.subheader("Weekly Status Preview")
-    AgGrid(
-        processed_tasks,
-        gridOptions=gridOptions,
-        enable_enterprise_modules=False,
-        fit_columns_on_grid_load=True
+    st.markdown(
+        f"""
+        <style>
+        /* Make table full width and cells padded */
+        .hover-copy-table {{
+            width: 100%;
+            border-collapse: collapse;
+        }}
+        .hover-copy-table th, .hover-copy-table td {{
+            border: 1px solid #ddd;
+            padding: 8px;
+            position: relative;
+        }}
+        .hover-copy-table td:hover::after {{
+            content: '📋';
+            position: absolute;
+            right: 5px;
+            top: 50%;
+            transform: translateY(-50%);
+            cursor: pointer;
+            font-size: 14px;
+        }}
+        .hover-copy-table th {{
+            background-color: #f2f2f2;
+            text-align: left;
+        }}
+        </style>
+
+        <script>
+        const tds = window.parent.document.querySelectorAll('.hover-copy-table td');
+        tds.forEach(td => {{
+            td.addEventListener('click', () => {{
+                navigator.clipboard.writeText(td.innerText);
+            }});
+        }});
+        </script>
+
+        {table_html}
+        """,
+        unsafe_allow_html=True
     )
