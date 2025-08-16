@@ -105,10 +105,15 @@ if uploaded_csv:
     final_table = pd.concat([processed_tasks, weekly_total], ignore_index=True)
 
     # -------------------------------
-    # Step 6: Display Table
+    # Step 6: Display Table with Weekly Total Highlight
     # -------------------------------
+    def highlight_weekly_total(row):
+        if row["Task Title"] == "Weekly Total":
+            return ['background-color: rgba(255,255,255,0.2)']*len(row)
+        return ['']*len(row)
+
     st.subheader("Weekly Status Preview")
-    st.dataframe(final_table[["Task Title", "Spent Hours"]], use_container_width=True)
+    st.dataframe(final_table[["Task Title", "Spent Hours"]].style.apply(highlight_weekly_total, axis=1), use_container_width=True)
 
     # Download CSV
     st.download_button(
