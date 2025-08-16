@@ -1,9 +1,8 @@
 import streamlit as st
 import pandas as pd
-from st_aggrid import AgGrid, GridOptionsBuilder
 
 st.set_page_config(layout="wide")
-st.title("Weekly Status Preview (Stable Version)")
+st.title("Weekly Status Preview (Original Table)")
 
 # -------------------------------
 # Step 1: Upload CSV
@@ -41,7 +40,7 @@ if uploaded_csv:
         st.stop()
 
     # -------------------------------
-    # Step 2: Separate Communication & Other Tasks
+    # Step 2: Merge tasks
     # -------------------------------
     communication_tasks = df[df["activity"].str.lower() == "communication"]
     other_tasks = df[df["activity"].str.lower() != "communication"]
@@ -64,10 +63,6 @@ if uploaded_csv:
                 "Task Title": row["description"],
                 "Spent Hours": row["spent_hours"]
             })
-
-    if not rows:
-        st.warning("No valid tasks found in CSV after cleaning.")
-        st.stop()
 
     processed_tasks = pd.DataFrame(rows)
 
@@ -98,17 +93,7 @@ if uploaded_csv:
     final_table = pd.concat([processed_tasks, weekly_total], ignore_index=True)
 
     # -------------------------------
-    # Step 5: Configure AG Grid (Stable)
+    # Step 5: Display Table
     # -------------------------------
-    gb = GridOptionsBuilder.from_dataframe(final_table)
-    gb.configure_default_column(resizable=True, editable=False)
-    gb.configure_grid_options(domLayout='autoHeight')  # full width
-    gridOptions = gb.build()
-
     st.subheader("Weekly Status Preview")
-    AgGrid(
-        final_table,
-        gridOptions=gridOptions,
-        enable_enterprise_modules=False,
-        fit_columns_on_grid_load=True
-    )
+    st.dataframe(final_table[["Task Title", "Spent Hours"]], use_container_width=True)
