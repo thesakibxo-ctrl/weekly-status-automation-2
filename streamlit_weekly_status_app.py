@@ -5,7 +5,7 @@ import streamlit.components.v1 as components
 # ------------------ SETTINGS ------------------
 st.set_page_config(page_title="Weekly Status", layout="centered")
 
-# Add Enosis logo at top
+# Add Enosis logo
 st.markdown(
     """
     <div style="text-align: center; margin-bottom:10px;">
@@ -15,19 +15,20 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-st.markdown("<h2 style='text-align: center;'>📊 Weekly Status Report</h2>", unsafe_allow_html=True)
+st.markdown("<h2 style='text-align: center; color:white;'>📊 Weekly Status Report</h2>", unsafe_allow_html=True)
 
 # ------------------ CSV UPLOAD ------------------
 uploaded_file = st.file_uploader("Upload your weekly status CSV", type=["csv"])
 
+# ------------------ COPY-ON-HOVER TABLE FUNCTION ------------------
 def display_table_with_copy(df):
-    # Build HTML table preserving all original columns and values
-    table_html = "<div style='overflow:auto; max-height:70vh;'>"
-    table_html += "<table style='border-collapse: collapse; margin:auto; font-family:sans-serif;'>"
+    # Build HTML table
+    table_html = f"<div style='overflow:auto; max-height:70vh; background-color: rgb(19,23,32); padding:10px; border-radius:6px;'>"
+    table_html += "<table style='border-collapse: collapse; margin:auto; width:100%;'>"
 
     # Header
-    table_html += "<thead style='position: sticky; top: 0; background: #f0f0f0;'>"
-    table_html += "<tr>" + "".join([f"<th style='padding:8px; border:1px solid #ccc;'>{col}</th>" for col in df.columns]) + "</tr>"
+    table_html += "<thead style='position: sticky; top: 0; background-color: rgb(19,23,32); color:white;'>"
+    table_html += "<tr>" + "".join([f"<th style='padding:8px; border:1px solid #555;'>{col}</th>" for col in df.columns]) + "</tr>"
     table_html += "</thead>"
 
     # Body
@@ -36,7 +37,7 @@ def display_table_with_copy(df):
         table_html += "<tr style='transition: background-color 0.2s;'>"
         for val in row:
             table_html += f"""
-            <td style='padding:8px; border:1px solid #ccc; position:relative;'>
+            <td style='padding:8px; border:1px solid #555; color:black; position:relative;'>
                 {val}
                 <button class="copy-btn" style="
                     visibility:hidden;
@@ -67,11 +68,11 @@ def display_table_with_copy(df):
         table_html += "</tr>"
     table_html += "</tbody></table></div>"
 
-    # JS + CSS for hover and copy functionality
+    # JS + CSS for hover and copy
     custom_script = """
     <style>
         td:hover .copy-btn { visibility: visible; }
-        tbody tr:hover { background-color: #f2faff !important; }
+        tbody tr:hover { background-color: rgba(255,255,255,0.1) !important; }
     </style>
     <script>
         const buttons = window.parent.document.querySelectorAll('.copy-btn');
@@ -93,6 +94,18 @@ def display_table_with_copy(df):
 # ------------------ SHOW TABLE ------------------
 if uploaded_file is not None:
     df = pd.read_csv(uploaded_file)
+
+    # Extract week range from Date column for Project Covered
+    if 'Date' in df.columns:
+        df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+        df = df.dropna(subset=['Date'])
+        start_date = df['Date'].min()
+        end_date = df['Date'].max()
+        start_str = start_date.strftime("%B %d")
+        end_str = end_date.strftime("%B %d, %Y")
+        project_covered_text = f"{start_str} - {end_str}"
+        st.markdown(f"<h3 style='text-align:center; font-size:20px; color:white;'>Project Covered: {project_covered_text}</h3>", unsafe_allow_html=True)
+
     display_table_with_copy(df)
 
     # Download CSV
