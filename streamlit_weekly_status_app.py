@@ -53,19 +53,13 @@ if uploaded_csv:
     # Merge Communication
     if not communication_tasks.empty:
         comm_hours = communication_tasks["spent_hours"].sum()
-        rows.append({
-            "Task Title": "Communication",
-            "Spent Hours": comm_hours
-        })
+        rows.append({"Task Title": "Communication", "Spent Hours": comm_hours})
 
     # Merge duplicate other tasks
     if not other_tasks.empty:
         grouped = other_tasks.groupby("description", as_index=False).agg({"spent_hours": "sum"})
         for _, row in grouped.iterrows():
-            rows.append({
-                "Task Title": row["description"],
-                "Spent Hours": row["spent_hours"]
-            })
+            rows.append({"Task Title": row["description"], "Spent Hours": row["spent_hours"]})
 
     processed_tasks = pd.DataFrame(rows)
 
@@ -88,11 +82,7 @@ if uploaded_csv:
     ).sum()
     total_h = total_minutes // 60
     total_m = total_minutes % 60
-    weekly_total = pd.DataFrame([{
-        "Task Title": "Weekly Total",
-        "Spent Hours": f"{total_h}h {total_m}m"
-    }])
-
+    weekly_total = pd.DataFrame([{"Task Title": "Weekly Total", "Spent Hours": f"{total_h}h {total_m}m"}])
     final_table = pd.concat([processed_tasks, weekly_total], ignore_index=True)
 
     # -------------------------------
@@ -111,7 +101,27 @@ if uploaded_csv:
         unsafe_allow_html=True
     )
 
-    st.dataframe(final_table[["Task Title", "Spent Hours"]].style.apply(highlight_weekly_total, axis=1), use_container_width=True)
+    # Highlight Weekly Total (10% white opacity)
+    def highlight_weekly_total(row):
+        if row["Task Title"] == "Weekly Total":
+            return ['background-color: rgba(255,255,255,0.1)']*len(row)
+        return ['']*len(row)
+
+    st.dataframe(
+        final_table[["Task Title", "Spent Hours"]].style.apply(highlight_weekly_total, axis=1),
+        use_container_width=True
+    )
+
+    # Hide index visually via CSS (works in any Pandas version)
+    st.markdown(
+        """
+        <style>
+        div[data-testid="stDataFrame"] table tbody th {display:none}
+        div[data-testid="stDataFrame"] table thead th:first-child {display:none}
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
 
     # -------------------------------
     # Step 6: Download CSV
