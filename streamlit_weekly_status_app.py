@@ -4,7 +4,7 @@ import requests
 import os
 import time
 
-st.title("Weekly Status Generator")
+st.title("Weekly Status")
 
 # -------------------------------
 # Step 0: Load OpenRouter API Key safely
@@ -18,42 +18,34 @@ if not api_key:
     st.stop()
 
 # -------------------------------
-# Helper: Summarize Task with verified OpenRouter format
+# Helper: Summarize Task using prompt-based OpenRouter completions
 # -------------------------------
 def summarize_task(text, retries=3, delay=2):
-    """Use OpenRouter GPT-4o-mini to summarize task description with retries."""
     if not text.strip():
         return "No description provided."
     
-    url = "https://openrouter.ai/api/v1/chat/completions"
+    url = "https://openrouter.ai/v1/completions"
     headers = {"Authorization": f"Bearer {api_key}"}
     payload = {
         "model": "gpt-4o-mini",
-        "messages": [
-            {"role": "system", "content": "You are a helpful assistant that summarizes tasks."},
-            {"role": "user", "content": f"Summarize this task in one concise sentence: {text}"}
-        ]
+        "prompt": f"Summarize this task in one concise sentence: {text}",
+        "max_tokens": 50
     }
 
     for attempt in range(retries):
         try:
             response = requests.post(url, json=payload, headers=headers, timeout=30)
-            print("API status code:", response.status_code)
-            print("API response:", response.text)
             response.raise_for_status()
             data = response.json()
-            # Check if choices exist
             if "choices" in data and len(data["choices"]) > 0:
-                return data["choices"][0]["message"]["content"]
+                return data["choices"][0]["text"].strip()
             else:
-                print("Warning: No choices returned from API")
                 return "No summary available"
         except Exception as e:
-            print(f"Attempt {attempt+1} failed:", e)
             if attempt < retries - 1:
                 time.sleep(delay)
             else:
-                return "No summary available"
+                return f"No summary available (error: {e})"
 
 # -------------------------------
 # Step 1: Upload CSV
@@ -121,7 +113,7 @@ if uploaded_csv:
         for _, row in grouped.iterrows():
             task_desc = row["description"]
             spent_hours = row["spent_hours"]
-            # Take all matching descriptions from CSV for better context
+            # Combine all matching descriptions for context
             task_text = " | ".join(other_tasks[other_tasks["description"] == task_desc]["description"].tolist())
             with st.spinner(f"Generating AI remark for task: {task_desc}"):
                 ai_summary = summarize_task(task_text)
@@ -138,7 +130,7 @@ if uploaded_csv:
     processed_tasks = pd.DataFrame(rows)
 
     # -------------------------------
-    # Step 5: Format Spent Hours as "0h 0m" with proper rounding
+    # Step 5: Format Spent Hours as "0h 0m"
     # -------------------------------
     def format_hours(decimal_hours):
         total_minutes = round(decimal_hours * 60)
