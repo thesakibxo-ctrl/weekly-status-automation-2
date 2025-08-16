@@ -4,7 +4,7 @@ import requests
 import os
 import time
 
-st.title("Weekly Status Preview with AI Remarks")
+st.title("Weekly Status Generator")
 
 # -------------------------------
 # Step 0: Load OpenRouter API Key safely
@@ -18,7 +18,7 @@ if not api_key:
     st.stop()
 
 # -------------------------------
-# Helper: Summarize Task with retries & fallback
+# Helper: Summarize Task with verified OpenRouter format
 # -------------------------------
 def summarize_task(text, retries=3, delay=2):
     """Use OpenRouter GPT-4o-mini to summarize task description with retries."""
@@ -29,16 +29,27 @@ def summarize_task(text, retries=3, delay=2):
     headers = {"Authorization": f"Bearer {api_key}"}
     payload = {
         "model": "gpt-4o-mini",
-        "messages": [{"role": "user", "content": f"Summarize this task in one sentence: {text}"}]
+        "messages": [
+            {"role": "system", "content": "You are a helpful assistant that summarizes tasks."},
+            {"role": "user", "content": f"Summarize this task in one concise sentence: {text}"}
+        ]
     }
 
     for attempt in range(retries):
         try:
             response = requests.post(url, json=payload, headers=headers, timeout=30)
+            print("API status code:", response.status_code)
+            print("API response:", response.text)
             response.raise_for_status()
             data = response.json()
-            return data["choices"][0]["message"]["content"]
+            # Check if choices exist
+            if "choices" in data and len(data["choices"]) > 0:
+                return data["choices"][0]["message"]["content"]
+            else:
+                print("Warning: No choices returned from API")
+                return "No summary available"
         except Exception as e:
+            print(f"Attempt {attempt+1} failed:", e)
             if attempt < retries - 1:
                 time.sleep(delay)
             else:
