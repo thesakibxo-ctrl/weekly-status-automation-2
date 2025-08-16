@@ -1,7 +1,8 @@
 import streamlit as st
 import pandas as pd
+import math
 
-st.title("Weekly Status Preview (Robust Version)")
+st.title("Weekly Status Preview (Polished Version)")
 
 # -------------------------------
 # Step 1: Upload CSV
@@ -73,10 +74,10 @@ if uploaded_csv:
     processed_tasks = pd.DataFrame(rows)
 
     # -------------------------------
-    # Step 5: Format Spent Hours as "0h 0m"
+    # Step 5: Format Spent Hours as "0h 0m" with proper rounding
     # -------------------------------
     def format_hours(decimal_hours):
-        total_minutes = int(decimal_hours * 60)
+        total_minutes = round(decimal_hours * 60)  # Use round instead of int to fix rounding errors
         h = total_minutes // 60
         m = total_minutes % 60
         return f"{h}h {m}m"
@@ -100,7 +101,7 @@ if uploaded_csv:
     final_table = pd.concat([processed_tasks, weekly_total], ignore_index=True)
 
     # -------------------------------
-    # Step 7: Show Table
+    # Step 7: Show Table Full Width
     # -------------------------------
     st.subheader("Weekly Status Preview")
-    st.dataframe(final_table[["Task Title", "Spent Hours", "Remarks"]])
+    st.dataframe(final_table[["Task Title", "Spent Hours", "Remarks"]], use_container_width=True)
