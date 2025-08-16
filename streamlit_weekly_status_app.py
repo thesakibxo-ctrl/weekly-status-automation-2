@@ -1,11 +1,10 @@
 import streamlit as st
 import pandas as pd
-import streamlit.components.v1 as components
 
 # -------------------------------
 # Streamlit Page Config
 # -------------------------------
-st.set_page_config(page_title="Weekly Status", layout="centered")
+st.set_page_config(layout="centered")
 st.title("Weekly Status Generate")
 
 # -------------------------------
@@ -87,72 +86,39 @@ if uploaded_csv:
     final_table = pd.concat([processed_tasks, weekly_total], ignore_index=True)
 
     # -------------------------------
-    # Step 5: Period Covered
+    # Step 5: Display Table with Weekly Total Highlight
     # -------------------------------
+    st.subheader("Weekly Status Preview")
+
+    # Period Covered below the heading
     df['date'] = pd.to_datetime(df['date'], errors='coerce')
     df = df.dropna(subset=['date'])
-    start_date = df['date'].min()
-    end_date = df['date'].max()
+    start_date = df.iloc[0]['date']
+    end_date = df.iloc[-1]['date']
     period_covered = f"{start_date.strftime('%B %d')} - {end_date.strftime('%B %d, %Y')}"
-
-    st.subheader("Weekly Status Preview")
     st.markdown(
         f"<p style='color:white; font-size:16px; font-weight:bold;'>Period Covered: {period_covered}</p>",
         unsafe_allow_html=True
     )
 
-    # -------------------------------
-    # Step 6: Generate Tailwind / Flowbite Table
-    # -------------------------------
-    table_html = f"""
-    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-    <div class="overflow-x-auto p-2 bg-gray-900 rounded" style="max-height:70vh;">
-        <table class="min-w-full divide-y divide-gray-700">
-            <thead class="bg-gray-800 text-white sticky top-0">
-                <tr>
-                    {"".join([f"<th class='px-4 py-2 text-left'>{col}</th>" for col in final_table.columns])}
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-700 text-gray-900">
-    """
+    st.dataframe(
+        final_table[["Task Title", "Spent Hours"]].style.apply(highlight_weekly_total, axis=1),
+        use_container_width=True
+    )
 
-    for _, row in final_table.iterrows():
-        bg_class = "bg-white/10" if row["Task Title"] == "Weekly Total" else ""
-        table_html += f"<tr class='{bg_class} hover:bg-white/20 transition-colors'>"
-        for val in row:
-            table_html += f"""
-            <td class='px-4 py-2 relative'>{val}
-                <button class="copy-btn hidden absolute top-1 right-1 text-xs bg-blue-600 text-white px-1 rounded">Copy</button>
-            </td>
-            """
-        table_html += "</tr>"
-
-    table_html += """
-            </tbody>
-        </table>
-    </div>
-    <script>
-    const buttons = document.querySelectorAll('.copy-btn');
-    buttons.forEach(btn => {
-        btn.parentElement.addEventListener('mouseenter', () => btn.classList.remove('hidden'));
-        btn.parentElement.addEventListener('mouseleave', () => btn.classList.add('hidden'));
-        btn.onclick = function() {
-            const text = btn.parentElement.innerText.replace('Copy','').trim();
-            navigator.clipboard.writeText(text);
-            const tooltip = document.createElement('span');
-            tooltip.innerText = 'Copied!';
-            tooltip.className = 'absolute top-1 right-10 bg-black text-white text-xs px-1 rounded';
-            btn.parentElement.appendChild(tooltip);
-            setTimeout(()=>{ tooltip.remove(); }, 1000);
-        };
-    });
-    </script>
-    """
-
-    components.html(table_html, height=500, scrolling=True)
+    # Hide index visually via CSS (works in any Pandas version)
+    st.markdown(
+        """
+        <style>
+        div[data-testid="stDataFrame"] table tbody th {display:none}
+        div[data-testid="stDataFrame"] table thead th:first-child {display:none}
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
 
     # -------------------------------
-    # Step 7: Download CSV
+    # Step 6: Download CSV
     # -------------------------------
     st.download_button(
         "📥 Download CSV",
