@@ -1,16 +1,20 @@
 import streamlit as st
 import pandas as pd
 import requests
+import os
 
 st.title("Weekly Status Preview with AI Summaries")
 
 # -------------------------------
-# Step 0: Load OpenRouter API Key
+# Step 0: Load OpenRouter API Key safely
 # -------------------------------
-# Make sure your API key is stored in .streamlit/secrets.toml as:
-# [openrouter]
-# api_key = "sk-xxxxxxx"
-api_key = st.secrets["openrouter"]["api_key"]
+api_key = st.secrets.get("openrouter", {}).get("api_key") or os.getenv("OPENROUTER_API_KEY")
+if not api_key:
+    st.error(
+        "OpenRouter API key not found! "
+        "Set it in .streamlit/secrets.toml or as environment variable OPENROUTER_API_KEY"
+    )
+    st.stop()
 
 def summarize_task(text):
     """Use OpenRouter GPT-4o-mini to summarize task description"""
@@ -107,7 +111,7 @@ if uploaded_csv:
     processed_tasks = pd.DataFrame(rows)
 
     # -------------------------------
-    # Step 5: Format Spent Hours as "0h 0m" with rounding
+    # Step 5: Format Spent Hours as "0h 0m" with proper rounding
     # -------------------------------
     def format_hours(decimal_hours):
         total_minutes = round(decimal_hours * 60)
