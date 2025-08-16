@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 
 st.set_page_config(layout="wide")
-st.title("Weekly Status Preview (Original Table)")
+st.title("Weekly Status Generator")
 
 # -------------------------------
 # Step 1: Upload CSV
