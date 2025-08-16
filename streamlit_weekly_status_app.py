@@ -1,68 +1,99 @@
 import streamlit as st
 import pandas as pd
-import requests
 
-st.set_page_config(page_title="Weekly Status", page_icon="📊", layout="centered")
+st.set_page_config(layout="centered")
+st.title("Weekly Status Generate")
 
-st.title("📊 Weekly Status App")
+# -------------------------------
+# Step 1: Upload CSV
+# -------------------------------
+uploaded_csv = st.file_uploader("Upload your timesheet CSV", type=["csv"])
 
-# Sidebar for API key
-api_key = st.sidebar.text_input("🔑 Enter your OpenRouter API Key (optional)", type="password")
-
-# Upload CSV
-uploaded_file = st.file_uploader("Upload your weekly status CSV", type=["csv"])
-
-# Function to get AI remark
-def get_ai_remark(task, api_key):
-    if not api_key:
-        return ""  # If no key, return empty remark
-    
+if uploaded_csv:
     try:
-        response = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "HTTP-Referer": "http://localhost:8501/",
-                "X-Title": "Weekly Status App"
-            },
-            json={
-                "model": "gpt-4o-mini",
-                "messages": [
-                    {"role": "user", "content": f"Write a short remark for this task: {task}"}
-                ],
-                "max_tokens": 40
-            }
-        )
-        result = response.json()
-        return result["choices"][0]["message"]["content"]
+        df = pd.read_csv(uploaded_csv, encoding="utf-8-sig", keep_default_na=False)
     except Exception as e:
-        return f"(Error: {str(e)})"
+        st.error(f"Error reading CSV: {e}")
+        st.stop()
 
-if uploaded_file is not None:
-    df = pd.read_csv(uploaded_file)
+    # Normalize columns
+    df.columns = df.columns.str.strip().str.lower()
 
-    # Add remarks column if not present
-    if "Remarks" not in df.columns:
-        df["Remarks"] = ""
+    # Check required columns
+    required_cols = ["description", "activity"]
+    missing_cols = [col for col in required_cols if col not in df.columns]
+    if missing_cols:
+        st.error(f"CSV is missing required columns: {missing_cols}")
+        st.stop()
 
-    # Generate AI remarks if key is provided
-    if api_key:
-        with st.spinner("✨ Generating AI remarks..."):
-            df["Remarks"] = df["Task"].apply(lambda x: get_ai_remark(x, api_key))
+    # Remove irrelevant rows
+    df = df[~df["description"].isin(["", "Total", "Weekly Total"])]
+    df = df.dropna(subset=["description", "activity"])
 
-    # Show Start & End Date (separated from table)
-    if "Start Date" in df.columns and "End Date" in df.columns:
-        st.markdown(
-            f"**📅 Reporting Period:** {df['Start Date'].iloc[0]} → {df['End Date'].iloc[0]}"
-        )
+    # Convert hours+minutes to decimal
+    if "hours" in df.columns and "minutes" in df.columns:
+        df["spent_hours"] = df["hours"].astype(float) + df["minutes"].astype(float)/60
+    elif "spent hours" in df.columns:
+        df["spent_hours"] = df["spent hours"].astype(float)
+    else:
+        st.error("CSV must have either 'Hours' and 'Minutes' or 'Spent Hours'.")
+        st.stop()
 
-    # Show final table
-    st.dataframe(df, use_container_width=True)
+    # -------------------------------
+    # Step 2: Merge tasks
+    # -------------------------------
+    communication_tasks = df[df["activity"].str.lower() == "communication"]
+    other_tasks = df[df["activity"].str.lower() != "communication"]
 
-    # Option to download updated CSV
-    st.download_button(
-        "📥 Download Updated CSV",
-        df.to_csv(index=False).encode("utf-8"),
-        "weekly_status_with_remarks.csv",
-        "text/csv"
-    )
+    rows = []
+
+    # Merge Communication
+    if not communication_tasks.empty:
+        comm_hours = communication_tasks["spent_hours"].sum()
+        rows.append({
+            "Task Title": "Communication",
+            "Spent Hours": comm_hours
+        })
+
+    # Merge duplicate other tasks
+    if not other_tasks.empty:
+        grouped = other_tasks.groupby("description", as_index=False).agg({"spent_hours": "sum"})
+        for _, row in grouped.iterrows():
+            rows.append({
+                "Task Title": row["description"],
+                "Spent Hours": row["spent_hours"]
+            })
+
+    processed_tasks = pd.DataFrame(rows)
+
+    # -------------------------------
+    # Step 3: Format Spent Hours as "0h 0m"
+    # -------------------------------
+    def format_hours(decimal_hours):
+        total_minutes = round(decimal_hours * 60)
+        h = total_minutes // 60
+        m = total_minutes % 60
+        return f"{h}h {m}m"
+
+    processed_tasks["Spent Hours"] = processed_tasks["Spent Hours"].apply(format_hours)
+
+    # -------------------------------
+    # Step 4: Add Weekly Total Row
+    # -------------------------------
+    total_minutes = processed_tasks["Spent Hours"].apply(
+        lambda x: int(x.split("h")[0])*60 + int(x.split(" ")[1].replace("m",""))
+    ).sum()
+    total_h = total_minutes // 60
+    total_m = total_minutes % 60
+    weekly_total = pd.DataFrame([{
+        "Task Title": "Weekly Total",
+        "Spent Hours": f"{total_h}h {total_m}m"
+    }])
+
+    final_table = pd.concat([processed_tasks, weekly_total], ignore_index=True)
+
+    # -------------------------------
+    # Step 5: Display Table
+    # -------------------------------
+    st.subheader("Weekly Status Preview")
+    st.dataframe(final_table[["Task Title", "Spent Hours"]], use_container_width=True)
