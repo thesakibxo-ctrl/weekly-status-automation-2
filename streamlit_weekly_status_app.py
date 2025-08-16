@@ -101,6 +101,12 @@ if uploaded_csv:
         unsafe_allow_html=True
     )
 
+    # Highlight Weekly Total (10% white opacity)
+    def highlight_weekly_total(row):
+        if row["Task Title"] == "Weekly Total":
+            return ['background-color: rgba(255,255,255,0.1)']*len(row)
+        return ['']*len(row)
+
     st.dataframe(
         final_table[["Task Title", "Spent Hours"]].style.apply(highlight_weekly_total, axis=1),
         use_container_width=True
