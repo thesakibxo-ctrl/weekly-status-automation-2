@@ -1,6 +1,9 @@
 import streamlit as st
 import pandas as pd
 
+# -------------------------------
+# Streamlit Page Config
+# -------------------------------
 st.set_page_config(layout="centered")
 st.title("Weekly Status Generate")
 
@@ -30,19 +33,7 @@ if uploaded_csv:
     df = df[~df["description"].isin(["", "Total", "Weekly Total"])]
     df = df.dropna(subset=["description", "activity", "date"])
 
-    # -------------------------------
-    # Step 1b: Period Covered
-    # -------------------------------
-    df['date'] = pd.to_datetime(df['date'], errors='coerce')
-    df = df.dropna(subset=['date'])
-    start_date = df.iloc[0]['date']
-    end_date = df.iloc[-1]['date']
-    period_covered = f"{start_date.strftime('%B %d')} - {end_date.strftime('%B %d, %Y')}"
-    st.markdown(f"<h3 style='color:white;'>Period Covered: {period_covered}</h3>", unsafe_allow_html=True)
-
-    # -------------------------------
-    # Step 2: Convert hours+minutes to decimal
-    # -------------------------------
+    # Convert hours+minutes to decimal
     if "hours" in df.columns and "minutes" in df.columns:
         df["spent_hours"] = df["hours"].astype(float) + df["minutes"].astype(float)/60
     elif "spent hours" in df.columns:
@@ -52,7 +43,7 @@ if uploaded_csv:
         st.stop()
 
     # -------------------------------
-    # Step 3: Merge tasks
+    # Step 2: Merge tasks
     # -------------------------------
     communication_tasks = df[df["activity"].str.lower() == "communication"]
     other_tasks = df[df["activity"].str.lower() != "communication"]
@@ -79,7 +70,7 @@ if uploaded_csv:
     processed_tasks = pd.DataFrame(rows)
 
     # -------------------------------
-    # Step 4: Format Spent Hours as "0h 0m"
+    # Step 3: Format Spent Hours as "0h 0m"
     # -------------------------------
     def format_hours(decimal_hours):
         total_minutes = round(decimal_hours * 60)
@@ -90,7 +81,7 @@ if uploaded_csv:
     processed_tasks["Spent Hours"] = processed_tasks["Spent Hours"].apply(format_hours)
 
     # -------------------------------
-    # Step 5: Add Weekly Total Row
+    # Step 4: Add Weekly Total Row
     # -------------------------------
     total_minutes = processed_tasks["Spent Hours"].apply(
         lambda x: int(x.split("h")[0])*60 + int(x.split(" ")[1].replace("m",""))
@@ -105,21 +96,35 @@ if uploaded_csv:
     final_table = pd.concat([processed_tasks, weekly_total], ignore_index=True)
 
     # -------------------------------
-    # Step 6: Display Table
+    # Step 5: Display Table with Weekly Total Highlight
     # -------------------------------
-    # Step 6: Display Table heading
     st.subheader("Weekly Status Preview")
 
-    # Period Covered below the heading, 16px and bold, white text
+    # Period Covered below the heading
+    df['date'] = pd.to_datetime(df['date'], errors='coerce')
+    df = df.dropna(subset=['date'])
+    start_date = df.iloc[0]['date']
+    end_date = df.iloc[-1]['date']
+    period_covered = f"{start_date.strftime('%B %d')} - {end_date.strftime('%B %d, %Y')}"
     st.markdown(
-    f"<p style='color:white; font-size:16px; font-weight:bold;'>Period Covered: {period_covered}</p>",
-    unsafe_allow_html=True
+        f"<p style='color:white; font-size:16px; font-weight:bold;'>Period Covered: {period_covered}</p>",
+        unsafe_allow_html=True
     )
 
+    # Highlight Weekly Total (10% white opacity)
+    def highlight_weekly_total(row):
+        if row["Task Title"] == "Weekly Total":
+            return ['background-color: rgba(255,255,255,0.1)']*len(row)
+        return ['']*len(row)
 
-    st.dataframe(final_table[["Task Title", "Spent Hours"]], use_container_width=True)
+    st.dataframe(
+        final_table[["Task Title", "Spent Hours"]].style.apply(highlight_weekly_total, axis=1).hide_index(),
+        use_container_width=True
+    )
 
-    # Download CSV
+    # -------------------------------
+    # Step 6: Download CSV
+    # -------------------------------
     st.download_button(
         "📥 Download CSV",
         final_table.to_csv(index=False).encode("utf-8"),
