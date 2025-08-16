@@ -1,8 +1,32 @@
 import streamlit as st
 import pandas as pd
-import math
+import requests
 
-st.title("Weekly Status Preview (Polished Version)")
+st.title("Weekly Status Preview with AI Summaries")
+
+# -------------------------------
+# Step 0: Load OpenRouter API Key
+# -------------------------------
+# Make sure your API key is stored in .streamlit/secrets.toml as:
+# [openrouter]
+# api_key = "sk-xxxxxxx"
+api_key = st.secrets["openrouter"]["api_key"]
+
+def summarize_task(text):
+    """Use OpenRouter GPT-4o-mini to summarize task description"""
+    url = "https://openrouter.ai/api/v1/chat/completions"
+    headers = {"Authorization": f"Bearer {api_key}"}
+    payload = {
+        "model": "gpt-4o-mini",
+        "messages": [{"role": "user", "content": f"Summarize this task in one sentence: {text}"}]
+    }
+    try:
+        response = requests.post(url, json=payload, headers=headers, timeout=30)
+        response.raise_for_status()
+        data = response.json()
+        return data["choices"][0]["message"]["content"]
+    except Exception as e:
+        return f"Error summarizing: {e}"
 
 # -------------------------------
 # Step 1: Upload CSV
@@ -16,7 +40,7 @@ if uploaded_csv:
         st.error(f"Error reading CSV: {e}")
         st.stop()
 
-    # Normalize column names: strip spaces and lowercase
+    # Normalize column names
     df.columns = df.columns.str.strip().str.lower()
     st.write("CSV Columns Detected:", df.columns.tolist())
 
@@ -56,7 +80,12 @@ if uploaded_csv:
     if not communication_tasks.empty:
         comm_hours = communication_tasks["spent_hours"].sum()
         comm_remarks = " | ".join(communication_tasks["description"].tolist())
-        rows.append({"Task Title": "Communication", "Spent Hours": comm_hours, "Remarks": comm_remarks})
+        ai_summary = summarize_task(comm_remarks)
+        rows.append({
+            "Task Title": "Communication",
+            "Spent Hours": comm_hours,
+            "Remarks": ai_summary
+        })
 
     # Merge duplicate descriptions for other tasks
     if not other_tasks.empty:
@@ -64,8 +93,12 @@ if uploaded_csv:
         for _, row in grouped.iterrows():
             task_title = row["description"]
             spent_hours = row["spent_hours"]
-            remarks = row["description"]
-            rows.append({"Task Title": task_title, "Spent Hours": spent_hours, "Remarks": remarks})
+            ai_summary = summarize_task(task_title)
+            rows.append({
+                "Task Title": task_title,
+                "Spent Hours": spent_hours,
+                "Remarks": ai_summary
+            })
 
     if not rows:
         st.warning("No valid tasks found in CSV after cleaning.")
@@ -74,10 +107,10 @@ if uploaded_csv:
     processed_tasks = pd.DataFrame(rows)
 
     # -------------------------------
-    # Step 5: Format Spent Hours as "0h 0m" with proper rounding
+    # Step 5: Format Spent Hours as "0h 0m" with rounding
     # -------------------------------
     def format_hours(decimal_hours):
-        total_minutes = round(decimal_hours * 60)  # Use round instead of int to fix rounding errors
+        total_minutes = round(decimal_hours * 60)
         h = total_minutes // 60
         m = total_minutes % 60
         return f"{h}h {m}m"
