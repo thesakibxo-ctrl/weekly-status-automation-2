@@ -1,8 +1,9 @@
 import streamlit as st
 import pandas as pd
+from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
 st.set_page_config(layout="wide")
-st.title("Weekly Status Preview with Copy-on-Hover")
+st.title("Weekly Status Preview with Click-to-Copy")
 
 # -------------------------------
 # Step 1: Upload CSV
@@ -75,39 +76,40 @@ if uploaded_csv:
     final_table = pd.concat([processed_tasks, weekly_total], ignore_index=True)
 
     # -------------------------------
-    # Step 3: Display Table with Copy-on-Hover
+    # Step 3: AG Grid with Click-to-Copy
     # -------------------------------
+    gb = GridOptionsBuilder.from_dataframe(final_table)
+    gb.configure_default_column(resizable=True, editable=False)
+    gb.configure_grid_options(domLayout='autoHeight')  # full width
+
+    # JS cell renderer for click-to-copy
+    copy_js = JsCode("""
+    function(params) {
+        const span = document.createElement('span');
+        span.style.position = 'relative';
+        span.innerText = params.value;
+
+        const btn = document.createElement('span');
+        btn.innerText = ' 📋';
+        btn.style.cursor = 'pointer';
+        btn.title = 'Click to copy';
+        btn.style.color = '#555';
+        btn.onmouseover = () => btn.style.color = 'black';
+        btn.onmouseout = () => btn.style.color = '#555';
+        btn.onclick = () => navigator.clipboard.writeText(params.value);
+
+        span.appendChild(btn);
+        return span;
+    }
+    """)
+
+    gb.configure_columns(["Task Title", "Spent Hours"], cellRenderer=copy_js)
+    gridOptions = gb.build()
+
     st.subheader("Weekly Status Preview")
-
-    # Convert DataFrame to HTML with custom CSS/JS
-    table_html = final_table.to_html(index=False, escape=False, classes="copy-table")
-
-    st.markdown(
-        f"""
-        <style>
-        .copy-table td {{
-            position: relative;
-            padding-right: 25px;
-        }}
-        .copy-table td:hover::after {{
-            content: '📋';
-            position: absolute;
-            right: 5px;
-            top: 50%;
-            transform: translateY(-50%);
-            cursor: pointer;
-        }}
-        </style>
-
-        <script>
-        const tds = window.parent.document.querySelectorAll('.copy-table td');
-        tds.forEach(td => {{
-            td.addEventListener('click', () => {{
-                navigator.clipboard.writeText(td.innerText);
-            }});
-        }});
-        </script>
-        {table_html}
-        """,
-        unsafe_allow_html=True
+    AgGrid(
+        final_table,
+        gridOptions=gridOptions,
+        enable_enterprise_modules=False,
+        fit_columns_on_grid_load=True
     )
