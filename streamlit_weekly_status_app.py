@@ -159,7 +159,7 @@ st.markdown(
     """
     <div style="
         position: fixed;
-        bottom: 10px;
+        bottom: 32px;
         width: 100%;
         text-align: left;
         color: white;
