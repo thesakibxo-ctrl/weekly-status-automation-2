@@ -161,7 +161,7 @@ st.markdown(
         position: fixed;
         bottom: 10px;
         width: 100%;
-        text-align: center;
+        text-align: left;
         color: white;
         font-size: 14px;
         opacity: 0.7;
