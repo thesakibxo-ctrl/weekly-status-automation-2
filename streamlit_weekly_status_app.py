@@ -5,7 +5,30 @@ import pandas as pd
 # Streamlit Page Config
 # -------------------------------
 st.set_page_config(layout="centered")
-st.title("Weekly Status Generate")
+
+logo_svg = """
+<svg xmlns="http://www.w3.org/2000/svg" width="102" height="63" viewBox="0 0 102 63" fill="none">
+<path d="M37 63H52L64 0H49L37 63Z" fill="white"/>
+<path d="M32.5 58.5L17 31.5L32.5 4.5H16L0 31.5L16 58.5H32.5Z" fill="#E92E34"/>
+<path d="M69 58.5L84.5 31.5L69 4.5H85.5L101.5 31.5L85.5 58.5H69Z" fill="#E92E34"/>
+</svg>
+"""
+
+# Wrap in a centered container and allow HTML rendering
+st.markdown(
+    f"""
+    <div style="text-align:center; margin-bottom:20px;">
+        {logo_svg}
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+# Headline rendered with Streamlit (avoids HTML escaping issues)
+st.markdown(
+    "<h1 style='text-align:center; color:white; font-size:32px;'>Weekly Status Generate</h1>",
+    unsafe_allow_html=True
+)
 
 # -------------------------------
 # Step 1: Upload CSV
