@@ -165,6 +165,7 @@ st.markdown(
         color: white;
         font-size: 14px;
         opacity: 0.7;
+        font-weight: 500
     ">
         Created by Sakib Hasan
     </div>
