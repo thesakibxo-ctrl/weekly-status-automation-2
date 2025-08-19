@@ -152,3 +152,22 @@ if uploaded_csv:
         "weekly_status.csv",
         "text/csv"
     )
+# -------------------------------
+# Footer
+# -------------------------------
+st.markdown(
+    """
+    <div style="
+        position: fixed;
+        bottom: 10px;
+        width: 100%;
+        text-align: center;
+        color: white;
+        font-size: 14px;
+        opacity: 0.7;
+    ">
+        Created by Sakib Hasan
+    </div>
+    """,
+    unsafe_allow_html=True
+)
