@@ -27,12 +27,6 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Headline rendered with Streamlit (avoids HTML escaping issues)
-st.markdown(
-    "<h1 style='text-align:center; color:white; font-size:32px;'>Weekly Status Generate</h1>",
-    unsafe_allow_html=True
-)
-
 # -------------------------------
 # Step 1: Upload CSV
 # -------------------------------
