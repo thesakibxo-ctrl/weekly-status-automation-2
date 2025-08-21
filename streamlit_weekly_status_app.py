@@ -121,15 +121,40 @@ if uploaded_csv:
         unsafe_allow_html=True
     )
 
-    # Add checkbox column
-    final_table_display["Copied?"] = False
+    # Add checkbox column FIRST
+    final_table_display.insert(0, "", False)
 
-    # Show with checkboxes
+    # Show editable table with checkboxes
     edited_table = st.data_editor(
         final_table_display,
         use_container_width=True,
         hide_index=True,
-        disabled=["Task Title", "Spent Hours"],  # keep them readonly
+        disabled=["Task Title", "Spent Hours"],  # keep data readonly
+    )
+
+    # Custom CSS for checkbox style
+    st.markdown(
+        """
+        <style>
+        /* Set checkbox column width */
+        div[data-testid="stDataFrame"] table td:first-child, 
+        div[data-testid="stDataFrame"] table th:first-child {
+            width:48px !important;
+            min-width:48px !important;
+            max-width:48px !important;
+            text-align:center !important;
+        }
+        /* Hide header for checkbox column */
+        div[data-testid="stDataFrame"] table th:first-child div {
+            display:none !important;
+        }
+        /* Change checkbox color */
+        input[type=checkbox] {
+            accent-color: #1976d2; /* blue */
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
     )
 
     # -------------------------------
