@@ -1,19 +1,36 @@
 import streamlit as st
 import pandas as pd
-import openpyxl
-from io import BytesIO
 
 # -------------------------------
 # Streamlit Page Config
 # -------------------------------
 st.set_page_config(layout="centered")
-st.title("Weekly Status Generate")
+
+# -------------------------------
+# Header with logo inline
+# -------------------------------
+logo_svg = """
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 102 63" fill="none">
+<path d="M37 63H52L64 0H49L37 63Z" fill="white"/>
+<path d="M32.5 58.5L17 31.5L32.5 4.5H16L0 31.5L16 58.5H32.5Z" fill="#E92E34"/>
+<path d="M69 58.5L84.5 31.5L69 4.5H85.5L101.5 31.5L85.5 58.5H69Z" fill="#E92E34"/>
+</svg>
+"""
+
+st.markdown(
+    f"""
+    <div style="display:flex; align-items:center; gap:10px;">
+        <div>{logo_svg}</div>
+        <h1 style="margin:0; color:white; font-size:32px;">Weekly Status Generate</h1>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
 # -------------------------------
 # Step 1: Upload CSV
 # -------------------------------
 uploaded_csv = st.file_uploader("Upload your timesheet CSV", type=["csv"])
-uploaded_template = "Enosis-Schedulewise Weekly Status Template.xlsx"  # local template file
 
 if uploaded_csv:
     try:
@@ -26,7 +43,7 @@ if uploaded_csv:
     df.columns = df.columns.str.strip().str.lower()
 
     # Check required columns
-    required_cols = ["description", "activity"]
+    required_cols = ["description", "activity", "date"]
     missing_cols = [col for col in required_cols if col not in df.columns]
     if missing_cols:
         st.error(f"CSV is missing required columns: {missing_cols}")
@@ -34,7 +51,7 @@ if uploaded_csv:
 
     # Remove irrelevant rows
     df = df[~df["description"].isin(["", "Total", "Weekly Total"])]
-    df = df.dropna(subset=["description", "activity"])
+    df = df.dropna(subset=["description", "activity", "date"])
 
     # Convert hours+minutes to decimal
     if "hours" in df.columns and "minutes" in df.columns:
@@ -56,19 +73,13 @@ if uploaded_csv:
     # Merge Communication
     if not communication_tasks.empty:
         comm_hours = communication_tasks["spent_hours"].sum()
-        rows.append({
-            "Task Title": "Communication",
-            "Spent Hours": comm_hours
-        })
+        rows.append({"Task Title": "Communication", "Spent Hours": comm_hours})
 
     # Merge duplicate other tasks
     if not other_tasks.empty:
         grouped = other_tasks.groupby("description", as_index=False).agg({"spent_hours": "sum"})
         for _, row in grouped.iterrows():
-            rows.append({
-                "Task Title": row["description"],
-                "Spent Hours": row["spent_hours"]
-            })
+            rows.append({"Task Title": row["description"], "Spent Hours": row["spent_hours"]})
 
     processed_tasks = pd.DataFrame(rows)
 
@@ -84,29 +95,80 @@ if uploaded_csv:
     processed_tasks["Spent Hours"] = processed_tasks["Spent Hours"].apply(format_hours)
 
     # -------------------------------
-    # Step 4: Insert into Template
+    # Step 4: Add Weekly Total Row
     # -------------------------------
-    wb = openpyxl.load_workbook(uploaded_template)
-    ws = wb["Weekly Task Status V2.0"]
-
-    start_row = 11  # First row for tasks
-
-    for i, row in processed_tasks.iterrows():
-        ws[f"C{start_row+i}"] = row["Task Title"]   # Task Title
-        ws[f"G{start_row+i}"] = row["Spent Hours"]  # Spent Hours
-        # Status (D/E) and Remarks stay untouched
-
-    # Save to memory
-    output = BytesIO()
-    wb.save(output)
-    output.seek(0)
+    total_minutes = processed_tasks["Spent Hours"].apply(
+        lambda x: int(x.split("h")[0])*60 + int(x.split(" ")[1].replace("m",""))
+    ).sum()
+    total_h = total_minutes // 60
+    total_m = total_minutes % 60
+    weekly_total = pd.DataFrame([{"Task Title": "Weekly Total", "Spent Hours": f"{total_h}h {total_m}m"}])
+    final_table = pd.concat([processed_tasks, weekly_total], ignore_index=True)
 
     # -------------------------------
-    # Step 5: Download Filled XLSX
+    # Step 5: Display Table with Weekly Total Highlight
+    # -------------------------------
+    st.subheader("Weekly Status Preview")
+
+    # Period Covered below the heading
+    df['date'] = pd.to_datetime(df['date'], errors='coerce')
+    df = df.dropna(subset=['date'])
+    start_date = df.iloc[0]['date']
+    end_date = df.iloc[-1]['date']
+    period_covered = f"{start_date.strftime('%B %d')} - {end_date.strftime('%B %d, %Y')}"
+    st.markdown(
+        f"<p style='color:white; font-size:16px; font-weight:bold;'>Period Covered: {period_covered}</p>",
+        unsafe_allow_html=True
+    )
+
+    # Highlight Weekly Total (10% white opacity)
+    def highlight_weekly_total(row):
+        if row["Task Title"] == "Weekly Total":
+            return ['background-color: rgba(255,255,255,0.1)']*len(row)
+        return ['']*len(row)
+
+    st.dataframe(
+        final_table[["Task Title", "Spent Hours"]].style.apply(highlight_weekly_total, axis=1),
+        use_container_width=True
+    )
+
+    # Hide index visually via CSS (works in any Pandas version)
+    st.markdown(
+        """
+        <style>
+        div[data-testid="stDataFrame"] table tbody th {display:none}
+        div[data-testid="stDataFrame"] table thead th:first-child {display:none}
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # -------------------------------
+    # Step 6: Download CSV
     # -------------------------------
     st.download_button(
-        label="📥 Download Weekly Status (XLSX)",
-        data=output,
-        file_name="Weekly_Status_Filled.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        "📥 Download CSV",
+        final_table.to_csv(index=False).encode("utf-8"),
+        "weekly_status.csv",
+        "text/csv"
     )
+# -------------------------------
+# Footer
+# -------------------------------
+st.markdown(
+    """
+    <div style="
+        position: fixed;
+        bottom: 32px;
+        width: 100%;
+        text-align: left;
+        color: white;
+        font-size: 14px;
+        opacity: 0.7;
+        font-weight: 400
+    ">
+        Created by Sakib Hasan
+    </div>
+    """,
+    unsafe_allow_html=True
+)
