@@ -106,7 +106,7 @@ if uploaded_csv:
     final_table_display = pd.concat([processed_tasks[["Task Title", "Spent Hours"]], weekly_total], ignore_index=True)
 
     # -------------------------------
-    # Step 5: Display Table with Weekly Total Highlight
+    # Step 5: Display Table with Checkboxes
     # -------------------------------
     st.subheader("Weekly Status Preview")
 
@@ -121,52 +121,34 @@ if uploaded_csv:
         unsafe_allow_html=True
     )
 
-    # Highlight Weekly Total
-    def highlight_weekly_total(row):
-        if row["Task Title"] == "Weekly Total":
-            return ['background-color: rgba(255,255,255,0.1)']*len(row)
-        return ['']*len(row)
+    # Add checkbox column
+    final_table_display["Copied?"] = False
 
-    st.dataframe(
-        final_table_display.style.apply(highlight_weekly_total, axis=1),
-        use_container_width=True
-    )
-
-    # Hide index visually
-    st.markdown(
-        """
-        <style>
-        div[data-testid="stDataFrame"] table tbody th {display:none}
-        div[data-testid="stDataFrame"] table thead th:first-child {display:none}
-        </style>
-        """,
-        unsafe_allow_html=True
+    # Show with checkboxes
+    edited_table = st.data_editor(
+        final_table_display,
+        use_container_width=True,
+        hide_index=True,
+        disabled=["Task Title", "Spent Hours"],  # keep them readonly
     )
 
     # -------------------------------
     # Step 6: Download Filled XLSX Template
     # -------------------------------
     try:
-        # Load the template workbook from the file system
         template_path = "Enosis-Schedulewise Weekly Status Template.xlsx"
         workbook = openpyxl.load_workbook(template_path)
-        
-        # Select the target sheet
         sheet = workbook["Weekly Task Status V2.0"]
 
-        # --- Data Insertion Logic ---
-        start_row = 11 # As specified, data starts from row 11
-        
-        # Write each processed task to the sheet
+        start_row = 11  # tasks start here
         for index, task in processed_tasks.iterrows():
             current_row = start_row + index
             sheet[f'C{current_row}'] = task['Task Title']
             sheet[f'G{current_row}'] = task['Spent Hours']
-        
-        # Save the modified workbook to an in-memory buffer
+
         excel_buffer = BytesIO()
         workbook.save(excel_buffer)
-        excel_buffer.seek(0) # Go to the beginning of the buffer
+        excel_buffer.seek(0)
 
         st.download_button(
             "📥 Download Filled Status (.xlsx)",
@@ -174,13 +156,8 @@ if uploaded_csv:
             "weekly_status_filled.xlsx",
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
-        
-    except FileNotFoundError:
-        st.error(f"Error: The template file '{template_path}' was not found. Please make sure it's in the same directory as the script.")
-    except KeyError:
-        st.error("Error: Could not find the sheet named 'Weekly Task Status V2.0' in the Excel template. Please check the file.")
     except Exception as e:
-        st.error(f"An unexpected error occurred while creating the Excel file: {e}")
+        st.error(f"Excel export error: {e}")
 
 # -------------------------------
 # Footer
