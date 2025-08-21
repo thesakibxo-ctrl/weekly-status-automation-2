@@ -1,5 +1,7 @@
 import streamlit as st
 import pandas as pd
+import openpyxl
+from io import BytesIO
 
 # -------------------------------
 # Streamlit Page Config
@@ -73,13 +75,13 @@ if uploaded_csv:
     # Merge Communication
     if not communication_tasks.empty:
         comm_hours = communication_tasks["spent_hours"].sum()
-        rows.append({"Task Title": "Communication", "Spent Hours": comm_hours})
+        rows.append({"Task Title": "Communication", "Spent Hours Decimal": comm_hours})
 
     # Merge duplicate other tasks
     if not other_tasks.empty:
         grouped = other_tasks.groupby("description", as_index=False).agg({"spent_hours": "sum"})
         for _, row in grouped.iterrows():
-            rows.append({"Task Title": row["description"], "Spent Hours": row["spent_hours"]})
+            rows.append({"Task Title": row["description"], "Spent Hours Decimal": row["spent_hours"]})
 
     processed_tasks = pd.DataFrame(rows)
 
@@ -92,18 +94,16 @@ if uploaded_csv:
         m = total_minutes % 60
         return f"{h}h {m}m"
 
-    processed_tasks["Spent Hours"] = processed_tasks["Spent Hours"].apply(format_hours)
+    processed_tasks["Spent Hours"] = processed_tasks["Spent Hours Decimal"].apply(format_hours)
 
     # -------------------------------
-    # Step 4: Add Weekly Total Row
+    # Step 4: Add Weekly Total Row for display
     # -------------------------------
-    total_minutes = processed_tasks["Spent Hours"].apply(
-        lambda x: int(x.split("h")[0])*60 + int(x.split(" ")[1].replace("m",""))
-    ).sum()
-    total_h = total_minutes // 60
-    total_m = total_minutes % 60
-    weekly_total = pd.DataFrame([{"Task Title": "Weekly Total", "Spent Hours": f"{total_h}h {total_m}m"}])
-    final_table = pd.concat([processed_tasks, weekly_total], ignore_index=True)
+    total_decimal_hours = processed_tasks["Spent Hours Decimal"].sum()
+    total_formatted_hours = format_hours(total_decimal_hours)
+    
+    weekly_total = pd.DataFrame([{"Task Title": "Weekly Total", "Spent Hours": total_formatted_hours}])
+    final_table_display = pd.concat([processed_tasks[["Task Title", "Spent Hours"]], weekly_total], ignore_index=True)
 
     # -------------------------------
     # Step 5: Display Table with Weekly Total Highlight
@@ -113,26 +113,26 @@ if uploaded_csv:
     # Period Covered below the heading
     df['date'] = pd.to_datetime(df['date'], errors='coerce')
     df = df.dropna(subset=['date'])
-    start_date = df.iloc[0]['date']
-    end_date = df.iloc[-1]['date']
+    start_date = df['date'].min()
+    end_date = df['date'].max()
     period_covered = f"{start_date.strftime('%B %d')} - {end_date.strftime('%B %d, %Y')}"
     st.markdown(
         f"<p style='color:white; font-size:16px; font-weight:bold;'>Period Covered: {period_covered}</p>",
         unsafe_allow_html=True
     )
 
-    # Highlight Weekly Total (10% white opacity)
+    # Highlight Weekly Total
     def highlight_weekly_total(row):
         if row["Task Title"] == "Weekly Total":
             return ['background-color: rgba(255,255,255,0.1)']*len(row)
         return ['']*len(row)
 
     st.dataframe(
-        final_table[["Task Title", "Spent Hours"]].style.apply(highlight_weekly_total, axis=1),
+        final_table_display.style.apply(highlight_weekly_total, axis=1),
         use_container_width=True
     )
 
-    # Hide index visually via CSS (works in any Pandas version)
+    # Hide index visually
     st.markdown(
         """
         <style>
@@ -144,14 +144,44 @@ if uploaded_csv:
     )
 
     # -------------------------------
-    # Step 6: Download CSV
+    # Step 6: Download Filled XLSX Template
     # -------------------------------
-    st.download_button(
-        "📥 Download CSV",
-        final_table.to_csv(index=False).encode("utf-8"),
-        "weekly_status.csv",
-        "text/csv"
-    )
+    try:
+        # Load the template workbook from the file system
+        template_path = "Enosis-Schedulewise Weekly Status Template.xlsx"
+        workbook = openpyxl.load_workbook(template_path)
+        
+        # Select the target sheet
+        sheet = workbook["Weekly Task Status V2.0"]
+
+        # --- Data Insertion Logic ---
+        start_row = 11 # As specified, data starts from row 11
+        
+        # Write each processed task to the sheet
+        for index, task in processed_tasks.iterrows():
+            current_row = start_row + index
+            sheet[f'C{current_row}'] = task['Task Title']
+            sheet[f'G{current_row}'] = task['Spent Hours']
+        
+        # Save the modified workbook to an in-memory buffer
+        excel_buffer = BytesIO()
+        workbook.save(excel_buffer)
+        excel_buffer.seek(0) # Go to the beginning of the buffer
+
+        st.download_button(
+            "📥 Download Filled Status (.xlsx)",
+            excel_buffer,
+            "weekly_status_filled.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        
+    except FileNotFoundError:
+        st.error(f"Error: The template file '{template_path}' was not found. Please make sure it's in the same directory as the script.")
+    except KeyError:
+        st.error("Error: Could not find the sheet named 'Weekly Task Status V2.0' in the Excel template. Please check the file.")
+    except Exception as e:
+        st.error(f"An unexpected error occurred while creating the Excel file: {e}")
+
 # -------------------------------
 # Footer
 # -------------------------------
